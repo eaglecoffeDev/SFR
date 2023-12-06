@@ -1,41 +1,48 @@
 import os
 import signal
 import threading
-from scapy.all import IP, TCP, UDP, send, sniff, sr1
+from scapy.all import ARP, Ether, IP, TCP, UDP, send, sniff, sr1
 import time
 
 class WifiBypass:
-    def __init__(self, interface='wlan0', local_ip='192.168.1.100', remote_host='www.sfr.fr', remote_port=80):
+    def __init__(self, interface='wlan0', local_ip='192.168.1.100', remote_host='www.sfr.fr', remote_port=80, target_mac='00:00:00:00:00:00'):
         self.interface = interface
         self.local_ip = local_ip
         self.remote_host = remote_host
         self.remote_port = remote_port
+        self.target_mac = target_mac
 
     def set_ip_forward(self):
         os.system("echo 1 > /proc/sys/net/ipv4/ip_forward")
 
     def process_packet(self, packet):
-        if IP in packet:
-            if packet[IP].dst == self.local_ip:
-                packet[IP].dst = self.remote_host
-                packet[IP].ttl -= 1
+        if packet.haslayer(Ether):
+            if packet[Ether].dst == self.target_mac:
+                packet[Ether].dst = 'ff:ff:ff:ff:ff:ff'
 
-                if TCP in packet:
-                    packet[TCP].dport = self.remote_port
+                if packet.haslayer(IP):
+                    packet[IP].dst = self.remote_host
+                    packet[IP].ttl -= 1
 
-                elif UDP in packet:
-                    packet[UDP].dport = self.remote_port
+                    if packet.haslayer(TCP):
+                        packet[TCP].dport = self.remote_port
+
+                    elif packet.haslayer(UDP):
+                        packet[UDP].dport = self.remote_port
 
                 send(packet, iface=self.interface, verbose=0)
-            elif packet[IP].dst == self.remote_host:
-                packet[IP].dst = self.local_ip
-                packet[IP].ttl -= 1
+            elif packet[Ether].dst == self.target_mac:
+                packet[Ether].dst = self.target_mac
 
-                if TCP in packet:
-                    packet[TCP].dport = packet[TCP].sport
+                if packet.haslayer(IP):
+                    packet[IP].dst = self.local_ip
+                    packet[IP].ttl -= 1
 
-                elif UDP in packet:
-                    packet[UDP].dport = packet[UDP].sport
+                    if packet.haslayer(TCP):
+                        packet[TCP].dport = packet[TCP].sport
+
+                    elif packet.haslayer(UDP):
+                        packet[UDP].dport = packet[UDP].sport
 
                 send(packet, iface=self.interface, verbose=0)
 
@@ -64,6 +71,6 @@ class WifiBypass:
         exit(0)
 
 if __name__ == '__main__':
-    bypass = WifiBypass()
+    bypass = WifiBypass(target_mac='00:00:00:00:00:00')
     signal.signal(signal.SIGINT, bypass.signal_handler)
     bypass.start()
