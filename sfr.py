@@ -55,7 +55,6 @@ class WifiBypass:
     def send_keep_alive(self):
         ip = IP(dst=self.remote_host)
         tcp = TCP(dport=self.remote_port, flags="S")
-        send(ip / tcp, iface=self.interface, verbose=0)
         response = sr1(ip / tcp, timeout=5, verbose=0)
         if response and response.haslayer(TCP) and response.getlayer(TCP).flags == 0x12:
             tcp_ack = TCP(dport=self.remote_port, flags="A")
