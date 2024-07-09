@@ -7,14 +7,13 @@ import requests
 import subprocess
 
 class WifiBypass:
-    def __init__(self, interface='wlan0', local_ip='192.168.1.100', remote_host='www.sfr.fr', remote_port=80, target_mac='00:00:00:00:00:00', monitor_ip='8.8.8.8'):
-        self.interface = interface
+    def __init__(self, local_ip='192.168.1.100', remote_host='www.sfr.fr', remote_port=80, target_mac='00:00:00:00:00:00', monitor_ip='8.8.8.8', target_ip='80.125.163.172'):
         self.local_ip = local_ip
         self.remote_host = remote_host
         self.remote_port = remote_port
         self.target_mac = target_mac
         self.monitor_ip = monitor_ip
-        self.target_ip = '80.125.163.172'
+        self.target_ip = target_ip
         self.bandwidth_limit = 90
         self.connection_loss = False
 
@@ -36,7 +35,7 @@ class WifiBypass:
                     elif packet.haslayer(UDP):
                         packet[UDP].dport = self.remote_port
 
-                send(packet, iface=self.interface, verbose=0)
+                send(packet, verbose=0)
             elif packet[Ether].dst == self.target_mac:
                 packet[Ether].dst = self.target_mac
 
@@ -50,7 +49,7 @@ class WifiBypass:
                     elif packet.haslayer(UDP):
                         packet[UDP].dport = packet[UDP].sport
 
-                send(packet, iface=self.interface, verbose=0)
+                send(packet, verbose=0)
 
     def send_keep_alive(self):
         ip = IP(dst=self.remote_host)
@@ -58,7 +57,7 @@ class WifiBypass:
         response = sr1(ip / tcp, timeout=5, verbose=0)
         if response and response.haslayer(TCP) and response.getlayer(TCP).flags == 0x12:
             tcp_ack = TCP(dport=self.remote_port, flags="A")
-            send(ip / tcp_ack, iface=self.interface, verbose=0)
+            send(ip / tcp_ack, verbose=0)
 
     def start(self):
         self.set_ip_forward()
@@ -70,7 +69,7 @@ class WifiBypass:
             time.sleep(60)
 
     def sniff_and_send(self):
-        sniff(iface=self.interface, prn=self.process_packet)
+        sniff(prn=self.process_packet)
 
     def monitor_connection(self):
         while True:
@@ -86,14 +85,24 @@ class WifiBypass:
                 self.connection_loss = True
                 self.adjust_bandwidth(self.target_ip, self.bandwidth_limit)
 
+            if self.connection_loss:
+                self.recover_connection()
+
             time.sleep(10)
 
     def adjust_bandwidth(self, ip, percentage):
         rate = f"{percentage}kbit"
-        os.system(f"tc qdisc del dev {self.interface} root")
-        os.system(f"tc qdisc add dev {self.interface} root handle 1: htb default 11")
-        os.system(f"tc class add dev {self.interface} parent 1: classid 1:1 htb rate {rate}")
-        os.system(f"tc filter add dev {self.interface} protocol ip parent 1:0 prio 1 u32 match ip dst {ip} flowid 1:1")
+        os.system(f"tc qdisc del dev {conf.iface} root")
+        os.system(f"tc qdisc add dev {conf.iface} root handle 1: htb default 11")
+        os.system(f"tc class add dev {conf.iface} parent 1: classid 1:1 htb rate {rate}")
+        os.system(f"tc filter add dev {conf.iface} protocol ip parent 1:0 prio 1 u32 match ip dst {ip} flowid 1:1")
+
+    def recover_connection(self):
+        print("Connection lost. Attempting to recover...")
+        arp = ARP(op=ARP.who_has, pdst=self.target_ip)
+        ether = Ether(dst="ff:ff:ff:ff:ff:ff")
+        packet = ether / arp
+        send(packet, verbose=0)
 
     def acces_panel_control_FAI_SFR(self, ip):
         url = f"http://{ip}/admin"
@@ -103,7 +112,17 @@ class WifiBypass:
         print('Vous avez arrêté le programme')
         exit(0)
 
+    def discover_interfaces(self):
+        interfaces = os.popen('ip addr show | grep "^[0-9]" | awk \'{print $2}\' | tr -d \':\'').read().split()
+        return interfaces
+
 if __name__ == '__main__':
     bypass = WifiBypass(target_mac='00:00:00:00:00:00')
     signal.signal(signal.SIGINT, bypass.signal_handler)
-    bypass.start()
+    
+    interfaces = bypass.discover_interfaces()
+    print(f"Discovered interfaces: {interfaces}")
+    for iface in interfaces:
+        conf.iface = iface
+        threading.Thread(target=bypass.start).start()
+
