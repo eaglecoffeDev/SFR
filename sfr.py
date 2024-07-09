@@ -1,7 +1,7 @@
 import os
 import signal
 import threading
-from scapy.all import ARP, Ether, IP, TCP, UDP, send, sniff, sr1
+from scapy.all import ARP, Ether, IP, TCP, UDP, send, sniff, sr1, conf
 import time
 import requests
 import subprocess
@@ -125,4 +125,3 @@ if __name__ == '__main__':
     for iface in interfaces:
         conf.iface = iface
         threading.Thread(target=bypass.start).start()
-
