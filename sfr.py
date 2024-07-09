@@ -3,6 +3,7 @@ import signal
 import threading
 from scapy.all import ARP, Ether, IP, TCP, UDP, send, sniff, sr1
 import time
+import requests
 import subprocess
 
 class WifiBypass:
@@ -14,7 +15,7 @@ class WifiBypass:
         self.target_mac = target_mac
         self.monitor_ip = monitor_ip
         self.target_ip = '80.125.163.172'
-        self.bandwidth_limit = 90  
+        self.bandwidth_limit = 90
         self.connection_loss = False
 
     def set_ip_forward(self):
@@ -67,22 +68,26 @@ class WifiBypass:
 
         while True:
             self.send_keep_alive()
-            time.sleep(60)  
+            time.sleep(60)
 
     def sniff_and_send(self):
         sniff(iface=self.interface, prn=self.process_packet)
 
     def monitor_connection(self):
         while True:
-            response = os.system(f"ping -c 1 {self.monitor_ip}")
-            if response == 0:
-                self.connection_loss = False
-                self.adjust_bandwidth(self.target_ip, 100)  
-            else:
+            try:
+                response = requests.get(f"http://{self.monitor_ip}", timeout=5)
+                if response.status_code == 200:
+                    self.connection_loss = False
+                    self.adjust_bandwidth(self.target_ip, 100)
+                else:
+                    self.connection_loss = True
+                    self.adjust_bandwidth(self.target_ip, self.bandwidth_limit)
+            except requests.RequestException:
                 self.connection_loss = True
-                self.adjust_bandwidth(self.target_ip, self.bandwidth_limit)  
+                self.adjust_bandwidth(self.target_ip, self.bandwidth_limit)
 
-            time.sleep(10) 
+            time.sleep(10)
 
     def adjust_bandwidth(self, ip, percentage):
         rate = f"{percentage}kbit"
@@ -93,7 +98,8 @@ class WifiBypass:
 
     def acces_panel_control_FAI_SFR(self, ip):
         url = f"http://{ip}/admin"
-        subprocess.run(["xdg-open", url])  
+        subprocess.run(["xdg-open", url])
+
     def signal_handler(self, signum, frame):
         print('Vous avez arrêté le programme')
         exit(0)
@@ -102,4 +108,3 @@ if __name__ == '__main__':
     bypass = WifiBypass(target_mac='00:00:00:00:00:00')
     signal.signal(signal.SIGINT, bypass.signal_handler)
     bypass.start()
-
