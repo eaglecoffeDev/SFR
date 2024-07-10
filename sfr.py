@@ -92,7 +92,10 @@ class WifiBypass:
 
     def adjust_bandwidth(self, ip, percentage):
         rate = f"{percentage}kbit"
-        os.system(f"tc qdisc del dev {conf.iface} root")
+        try:
+            os.system(f"tc qdisc del dev {conf.iface} root")
+        except Exception as e:
+            print(f"Error deleting qdisc: {e}")
         os.system(f"tc qdisc add dev {conf.iface} root handle 1: htb default 11")
         os.system(f"tc class add dev {conf.iface} parent 1: classid 1:1 htb rate {rate}")
         os.system(f"tc filter add dev {conf.iface} protocol ip parent 1:0 prio 1 u32 match ip dst {ip} flowid 1:1")
@@ -125,3 +128,4 @@ if __name__ == '__main__':
     for iface in interfaces:
         conf.iface = iface
         threading.Thread(target=bypass.start).start()
+
