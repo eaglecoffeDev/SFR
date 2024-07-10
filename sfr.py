@@ -102,7 +102,7 @@ class WifiBypass:
 
     def recover_connection(self):
         print("Connection lost. Attempting to recover...")
-        arp = ARP(op=ARP.who_has, pdst=self.target_ip)
+        arp = ARP(op="who-has", pdst=self.target_ip)
         ether = Ether(dst="ff:ff:ff:ff:ff:ff")
         packet = ether / arp
         send(packet, verbose=0)
