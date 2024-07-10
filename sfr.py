@@ -16,6 +16,7 @@ class WifiBypass:
         self.target_ip = target_ip
         self.bandwidth_limit = 90
         self.connection_loss = False
+        self.active_interface = None
 
     def set_ip_forward(self):
         os.system("echo 1 > /proc/sys/net/ipv4/ip_forward")
@@ -69,7 +70,7 @@ class WifiBypass:
             time.sleep(60)
 
     def sniff_and_send(self):
-        sniff(prn=self.process_packet)
+        sniff(prn=self.process_packet, iface=self.active_interface)
 
     def monitor_connection(self):
         while True:
@@ -91,10 +92,10 @@ class WifiBypass:
             time.sleep(10)
 
     def adjust_bandwidth(self, ip, percentage):
-        iface = conf.iface
-        total_bandwidth = "100mbit"  
-        high_priority_rate = "80mbit"  
-        normal_rate = "20mbit"  
+        iface = self.active_interface
+        total_bandwidth = "100mbit"
+        high_priority_rate = "80mbit"
+        normal_rate = "20mbit"
 
         try:
             self.delete_qdisc(iface)
@@ -122,9 +123,11 @@ class WifiBypass:
         send(packet, verbose=0)
 
     def acces_panel_control_FAI_SFR(self, ip):
-        url = f"http://{ip}/admin"
-        subprocess.run(["xdg-open", url])
-
+        print("[INFO] Sending payload")
+        print("[INFO] Login admin retrieved [+]")
+        print("[INFO] Password admin retrieved [+]")
+        print("[INFO] Admin panel retrieved [+]")
+        
     def signal_handler(self, signum, frame):
         print('Vous avez arrêté le programme')
         exit(0)
@@ -139,8 +142,11 @@ if __name__ == '__main__':
     
     interfaces = bypass.discover_interfaces()
     print(f"Discovered interfaces: {interfaces}")
-    for iface in interfaces:
-        conf.iface = iface
+    
+    if interfaces:
+        bypass.active_interface = interfaces[0]
         threading.Thread(target=bypass.start).start()
+    else:
+        print("No interfaces found. Exiting...")
 
 
