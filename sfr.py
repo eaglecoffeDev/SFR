@@ -1,10 +1,9 @@
 import os
 import signal
 import threading
-from scapy.all import ARP, Ether, IP, TCP, UDP, send, sniff, sr1, conf
+from scapy.all import ARP, Ether, IP, TCP, send, sniff, sr1
 import time
 import requests
-import subprocess
 
 class WifiBypass:
     def __init__(self, local_ip='192.168.1.100', remote_host='www.sfr.fr', remote_port=80, target_mac='00:00:00:00:00:00', monitor_ip='8.8.8.8', target_ip='80.125.163.172'):
@@ -20,6 +19,7 @@ class WifiBypass:
 
     def set_ip_forward(self):
         os.system("echo 1 > /proc/sys/net/ipv4/ip_forward")
+        print("[+] IP forwarding enabled")
 
     def process_packet(self, packet):
         if packet.haslayer(Ether):
@@ -33,10 +33,8 @@ class WifiBypass:
                     if packet.haslayer(TCP):
                         packet[TCP].dport = self.remote_port
 
-                    elif packet.haslayer(UDP):
-                        packet[UDP].dport = self.remote_port
-
                 send(packet, verbose=0)
+                print(f"[+] Packet sent to {self.remote_host}")
             elif packet[Ether].dst == self.target_mac:
                 packet[Ether].dst = self.target_mac
 
@@ -47,10 +45,8 @@ class WifiBypass:
                     if packet.haslayer(TCP):
                         packet[TCP].dport = packet[TCP].sport
 
-                    elif packet.haslayer(UDP):
-                        packet[UDP].dport = packet[UDP].sport
-
                 send(packet, verbose=0)
+                print(f"[+] Packet sent to {self.local_ip}")
 
     def send_keep_alive(self):
         ip = IP(dst=self.remote_host)
@@ -59,6 +55,9 @@ class WifiBypass:
         if response and response.haslayer(TCP) and response.getlayer(TCP).flags == 0x12:
             tcp_ack = TCP(dport=self.remote_port, flags="A")
             send(ip / tcp_ack, verbose=0)
+            print("[+] Keep-alive sent")
+        else:
+            print("[-] Keep-alive failed")
 
     def start(self):
         self.set_ip_forward()
@@ -79,12 +78,15 @@ class WifiBypass:
                 if response.status_code == 200:
                     self.connection_loss = False
                     self.adjust_bandwidth(self.target_ip, 100)
+                    print("[+] Connection to monitor IP successful")
                 else:
                     self.connection_loss = True
                     self.adjust_bandwidth(self.target_ip, self.bandwidth_limit)
+                    print("[-] Connection to monitor IP failed")
             except requests.RequestException:
                 self.connection_loss = True
                 self.adjust_bandwidth(self.target_ip, self.bandwidth_limit)
+                print("[-] Connection to monitor IP failed")
 
             if self.connection_loss:
                 self.recover_connection()
@@ -100,13 +102,16 @@ class WifiBypass:
         try:
             self.delete_qdisc(iface)
             self.add_qdisc(iface, total_bandwidth, high_priority_rate, normal_rate, ip)
+            print(f"[+] Bandwidth adjusted for {ip}")
         except Exception as e:
-            print(f"Error adjusting bandwidth: {e}")
+            print(f"[-] Error adjusting bandwidth: {e}")
 
     def delete_qdisc(self, iface):
         result = os.system(f"tc qdisc del dev {iface} root")
-        if result != 0:
-            print(f"Error: Could not delete qdisc on interface {iface}")
+        if result == 0:
+            print(f"[+] Deleted qdisc on interface {iface}")
+        else:
+            print(f"[-] Failed to delete qdisc on interface {iface}")
 
     def add_qdisc(self, iface, total_rate, high_priority_rate, normal_rate, high_priority_ip):
         os.system(f"tc qdisc add dev {iface} root handle 1: htb default 20")
@@ -114,13 +119,15 @@ class WifiBypass:
         os.system(f"tc class add dev {iface} parent 1:1 classid 1:10 htb rate {high_priority_rate}")
         os.system(f"tc filter add dev {iface} protocol ip parent 1:0 prio 1 u32 match ip dst {high_priority_ip} flowid 1:10")
         os.system(f"tc class add dev {iface} parent 1:1 classid 1:20 htb rate {normal_rate}")
+        print(f"[+] Qdisc added for {iface}")
 
     def recover_connection(self):
-        print("Connection lost. Attempting to recover...")
+        print("[-] Connection lost. Attempting to recover...")
         arp = ARP(op="who-has", pdst=self.target_ip)
         ether = Ether(dst="ff:ff:ff:ff:ff:ff")
         packet = ether / arp
         send(packet, verbose=0)
+        print("[+] ARP recovery packet sent")
 
     def acces_panel_control_FAI_SFR(self, ip):
         print("[INFO] Sending payload")
@@ -148,5 +155,6 @@ if __name__ == '__main__':
         threading.Thread(target=bypass.start).start()
     else:
         print("No interfaces found. Exiting...")
+
 
 
