@@ -92,13 +92,22 @@ class WifiBypass:
 
     def adjust_bandwidth(self, ip, percentage):
         rate = f"{percentage}kbit"
+        iface = conf.iface
         try:
-            os.system(f"tc qdisc del dev {conf.iface} root")
+            self.delete_qdisc(iface)
+            self.add_qdisc(iface, rate, ip)
         except Exception as e:
-            print(f"Error deleting qdisc: {e}")
-        os.system(f"tc qdisc add dev {conf.iface} root handle 1: htb default 11")
-        os.system(f"tc class add dev {conf.iface} parent 1: classid 1:1 htb rate {rate}")
-        os.system(f"tc filter add dev {conf.iface} protocol ip parent 1:0 prio 1 u32 match ip dst {ip} flowid 1:1")
+            print(f"Error adjusting bandwidth: {e}")
+
+    def delete_qdisc(self, iface):
+        result = os.system(f"tc qdisc del dev {iface} root")
+        if result != 0:
+            print(f"Error: Could not delete qdisc on interface {iface}")
+
+    def add_qdisc(self, iface, rate, ip):
+        os.system(f"tc qdisc add dev {iface} root handle 1: htb default 11")
+        os.system(f"tc class add dev {iface} parent 1: classid 1:1 htb rate {rate}")
+        os.system(f"tc filter add dev {iface} protocol ip parent 1:0 prio 1 u32 match ip dst {ip} flowid 1:1")
 
     def recover_connection(self):
         print("Connection lost. Attempting to recover...")
@@ -128,4 +137,5 @@ if __name__ == '__main__':
     for iface in interfaces:
         conf.iface = iface
         threading.Thread(target=bypass.start).start()
+
 
